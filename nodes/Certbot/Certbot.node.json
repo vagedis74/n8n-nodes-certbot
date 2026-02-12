@@ -1,0 +1,17 @@
+{
+	"node": "n8n-nodes-base.certbot",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Miscellaneous"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://certbot.eff.org/docs/"
+			}
+		]
+	},
+	"alias": ["ssl", "certificate", "letsencrypt", "https", "tls", "cloudflare", "dns"],
+	"subcategories": {
+		"Miscellaneous": ["SSL/TLS"]
+	}
+}

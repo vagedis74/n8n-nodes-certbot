@@ -1,0 +1,39 @@
+{
+  "name": "n8n-nodes-certbot",
+  "version": "0.1.0",
+  "description": "n8n community node to manage Let's Encrypt SSL certificates via Certbot with Cloudflare DNS-01 validation",
+  "keywords": [
+    "n8n-community-node-package",
+    "certbot",
+    "letsencrypt",
+    "ssl",
+    "cloudflare",
+    "dns"
+  ],
+  "license": "MIT",
+  "main": "dist/nodes/Certbot/Certbot.node.js",
+  "scripts": {
+    "build": "tsc && cp nodes/Certbot/certbot.svg nodes/Certbot/Certbot.node.json dist/nodes/Certbot/",
+    "lint": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/CloudflareDnsApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Certbot/Certbot.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "n8n-workflow": "^1.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
