@@ -254,8 +254,8 @@ function parseObtainOutput(output: string): IDataObject {
 		result.privateKeyPath = keyPathMatch[1];
 	}
 
-	const expiryMatch = output.match(/Certificate.*?expires?\s+on\s+(\S+(?:\s+\S+)?)/i)
-		|| output.match(/valid until\s+(\S+(?:\s+\S+)?)/i)
+	const expiryMatch = output.match(/expires?\s+on\s+(\d{4}-\d{2}-\d{2})/i)
+		|| output.match(/valid until\s+(\d{4}-\d{2}-\d{2})/i)
 		|| output.match(/(\d{4}-\d{2}-\d{2})/);
 	if (expiryMatch) {
 		result.expiryDate = expiryMatch[1];
@@ -282,7 +282,8 @@ function parseCertificatesOutput(output: string): Array<IDataObject> {
 			privateKeyPath: '',
 		};
 
-		const domainsMatch = block.match(/Domains:\s*(.+)/);
+		const domainsMatch = block.match(/Domains:\s*(.+)/)
+			|| block.match(/Identifiers:\s*(.+)/);
 		if (domainsMatch) {
 			cert.domains = domainsMatch[1].trim().split(/\s+/);
 		}
