@@ -1,0 +1,37 @@
+{
+  "name": "Test Certbot Node",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useSudo": false
+      },
+      "id": "e5f6g7h8",
+      "name": "Certbot List",
+      "type": "n8n-nodes-certbot.certbot",
+      "typeVersion": 1,
+      "position": [450, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Certbot List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
