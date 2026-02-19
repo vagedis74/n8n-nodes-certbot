@@ -1,0 +1,190 @@
+{
+  "name": "Auto-Renew Certificates (Daily Schedule)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily 02:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useSudo": true
+      },
+      "id": "certbot-list",
+      "name": "Certbot List",
+      "type": "n8n-nodes-certbot.certbot",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "credentials": {
+        "cloudflareDnsApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Cloudflare DNS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter certificates expiring within 14 days\nconst RENEW_THRESHOLD_DAYS = 14;\nconst now = new Date();\nconst results = [];\n\nfor (const item of $input.all()) {\n  const cert = item.json;\n  if (!cert.expiryDate) continue;\n\n  // Parse expiry date (format: YYYY-MM-DD HH:MM:SS+00:00 or similar)\n  const expiry = new Date(cert.expiryDate);\n  const daysLeft = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));\n\n  if (daysLeft < RENEW_THRESHOLD_DAYS) {\n    results.push({\n      json: {\n        certificateName: cert.certificateName,\n        domains: cert.domains || [],\n        expiryDate: cert.expiryDate,\n        daysLeft: daysLeft,\n        domainsString: (cert.domains || []).join(',')\n      }\n    });\n  }\n}\n\nif (results.length === 0) {\n  // No certs need renewal - output a summary item\n  return [{ json: { message: 'No certificates need renewal', renewed: 0, _skipRenewal: true } }];\n}\n\nreturn results;"
+      },
+      "id": "filter-expiring",
+      "name": "Filter Expiring Certs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json._skipRenewal }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-needs-renewal",
+      "name": "Needs Renewal?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "operation": "obtain",
+        "domains": "={{ $json.domainsString }}",
+        "email": "admin@example.com",
+        "certName": "={{ $json.certificateName }}",
+        "keyType": "ecdsa",
+        "server": "production",
+        "forceRenewal": true,
+        "propagationSeconds": 30,
+        "useSudo": true
+      },
+      "id": "certbot-renew",
+      "name": "Certbot Renew",
+      "type": "n8n-nodes-certbot.certbot",
+      "typeVersion": 1,
+      "position": [1050, 250],
+      "credentials": {
+        "cloudflareDnsApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Cloudflare DNS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect renewal results into a summary\nconst items = $input.all();\nconst results = [];\nlet renewed = 0;\nlet failed = 0;\n\nfor (const item of items) {\n  if (item.json.success) {\n    renewed++;\n    results.push(`  Renewed: ${item.json.domain} (expires ${item.json.expiryDate})`);\n  } else {\n    failed++;\n    results.push(`  FAILED: ${item.json.domain || 'unknown'} - ${item.json.message || item.json.error || 'unknown error'}`);\n  }\n}\n\nconst summary = [\n  `Certificate Auto-Renewal Summary (${new Date().toISOString().split('T')[0]})`,\n  `  Renewed: ${renewed}`,\n  `  Failed:  ${failed}`,\n  '',\n  ...results\n].join('\\n');\n\nreturn [{ json: { summary, renewed, failed, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "build-summary",
+      "name": "Build Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No certs needed renewal - pass through\nreturn [{ json: { summary: `No certificates need renewal (${new Date().toISOString().split('T')[0]})`, renewed: 0, failed: 0, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "no-renewal-summary",
+      "name": "No Renewal Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 450]
+    }
+  ],
+  "connections": {
+    "Daily 02:00": {
+      "main": [
+        [
+          {
+            "node": "Certbot List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Certbot List": {
+      "main": [
+        [
+          {
+            "node": "Filter Expiring Certs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Expiring Certs": {
+      "main": [
+        [
+          {
+            "node": "Needs Renewal?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Renewal?": {
+      "main": [
+        [
+          {
+            "node": "Certbot Renew",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Renewal Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Certbot Renew": {
+      "main": [
+        [
+          {
+            "node": "Build Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Method 4: Autonomous daily certificate renewal. Runs at 02:00, checks all certs, renews those expiring within 14 days. Servers pull renewed certs at 06:00 via manage-certs.ps1 -PullOnly or manage-certs.sh pull-renew."
+  }
+}

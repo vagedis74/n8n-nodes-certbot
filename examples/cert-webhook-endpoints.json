@@ -1,0 +1,369 @@
+{
+  "name": "Certificate API Webhooks",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "cert/list",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-list",
+      "name": "Webhook List",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 200],
+      "webhookId": "cert-list"
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useSudo": true
+      },
+      "id": "certbot-list",
+      "name": "Certbot List",
+      "type": "n8n-nodes-certbot.certbot",
+      "typeVersion": 1,
+      "position": [450, 200],
+      "credentials": {
+        "cloudflareDnsApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Cloudflare DNS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ certificates: $input.all().map(i => i.json) }) }}",
+        "options": {}
+      },
+      "id": "respond-list",
+      "name": "Respond List",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "cert/check",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-check",
+      "name": "Webhook Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 450],
+      "webhookId": "cert-check"
+    },
+    {
+      "parameters": {
+        "jsCode": "const domain = $input.first().json.query.domain;\nif (!domain) {\n  throw new Error('Missing domain query parameter');\n}\n\nreturn [{ json: { domain } }];"
+      },
+      "id": "parse-check-domain",
+      "name": "Parse Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 450]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "useSudo": true
+      },
+      "id": "certbot-list-for-check",
+      "name": "Certbot List (Check)",
+      "type": "n8n-nodes-certbot.certbot",
+      "typeVersion": 1,
+      "position": [700, 450],
+      "credentials": {
+        "cloudflareDnsApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Cloudflare DNS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const domain = $('Parse Domain').first().json.domain;\nconst certs = $input.all().map(i => i.json);\nconst now = new Date();\n\n// Find certificates that cover this domain\nconst matching = certs.filter(c =>\n  c.domains && c.domains.some(d => d === domain || (d.startsWith('*.') && domain.endsWith(d.slice(1))))\n);\n\nlet latestCert = null;\nlet daysUntilExpiry = -1;\n\nfor (const cert of matching) {\n  if (cert.expiryDate) {\n    const expiry = new Date(cert.expiryDate);\n    const days = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));\n    if (days > daysUntilExpiry) {\n      daysUntilExpiry = days;\n      latestCert = {\n        commonName: cert.certificateName,\n        issuer: \"Let's Encrypt\",\n        notBefore: cert.expiryDate ? new Date(new Date(cert.expiryDate).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString() : null,\n        notAfter: cert.expiryDate\n      };\n    }\n  }\n}\n\nreturn [{\n  json: {\n    domain,\n    totalCertsFound: matching.length,\n    activeCerts: matching.filter(c => {\n      if (!c.expiryDate) return false;\n      return new Date(c.expiryDate) > now;\n    }).length,\n    daysUntilExpiry,\n    latestCert\n  }\n}];"
+      },
+      "id": "check-cert-status",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-check",
+      "name": "Respond Check",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 450]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "cert/request",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-request",
+      "name": "Webhook Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 700],
+      "webhookId": "cert-request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const domain = $input.first().json.query.domain;\nif (!domain) {\n  throw new Error('Missing domain query parameter');\n}\n\nreturn [{ json: { domains: domain } }];"
+      },
+      "id": "parse-request-domain",
+      "name": "Parse Request Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "operation": "obtain",
+        "domains": "={{ $json.domains }}",
+        "email": "admin@example.com",
+        "keyType": "ecdsa",
+        "server": "production",
+        "forceRenewal": false,
+        "propagationSeconds": 30,
+        "useSudo": true
+      },
+      "id": "certbot-obtain",
+      "name": "Certbot Obtain",
+      "type": "n8n-nodes-certbot.certbot",
+      "typeVersion": 1,
+      "position": [700, 700],
+      "credentials": {
+        "cloudflareDnsApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Cloudflare DNS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-request",
+      "name": "Respond Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 700]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "cert/download",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-download",
+      "name": "Webhook Download",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 950],
+      "webhookId": "cert-download"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { domain, file } = $input.first().json.query;\nif (!domain || !file) {\n  throw new Error('Missing domain or file query parameter');\n}\n\n// Validate file parameter to prevent path traversal\nconst allowedFiles = ['fullchain.pem', 'privkey.pem', 'cert.pem', 'chain.pem'];\nif (!allowedFiles.includes(file)) {\n  throw new Error(`Invalid file: ${file}. Allowed: ${allowedFiles.join(', ')}`);\n}\n\n// Validate domain to prevent path traversal\nif (!/^[a-zA-Z0-9][a-zA-Z0-9.*-]+\\.[a-zA-Z]{2,}$/.test(domain)) {\n  throw new Error('Invalid domain name');\n}\n\nreturn [{ json: { domain, file, path: `/etc/letsencrypt/live/${domain}/${file}` } }];"
+      },
+      "id": "parse-download-params",
+      "name": "Parse Download Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 950]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst { domain, file, path: filePath } = $json;\n\ntry {\n  const content = fs.readFileSync(filePath, 'utf8');\n  return [{ json: { content, domain, file } }];\n} catch (err) {\n  throw new Error(`Certificate file not found: ${filePath}`);\n}"
+      },
+      "id": "read-cert-file",
+      "name": "Read Cert File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 950]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.content }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-pem-file"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "=attachment; filename=\"{{ $json.file }}\""
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-download",
+      "name": "Respond Download",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 950]
+    }
+  ],
+  "connections": {
+    "Webhook List": {
+      "main": [
+        [
+          {
+            "node": "Certbot List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Certbot List": {
+      "main": [
+        [
+          {
+            "node": "Respond List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Check": {
+      "main": [
+        [
+          {
+            "node": "Parse Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Domain": {
+      "main": [
+        [
+          {
+            "node": "Certbot List (Check)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Certbot List (Check)": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Respond Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Request Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request Domain": {
+      "main": [
+        [
+          {
+            "node": "Certbot Obtain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Certbot Obtain": {
+      "main": [
+        [
+          {
+            "node": "Respond Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Download": {
+      "main": [
+        [
+          {
+            "node": "Parse Download Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Download Params": {
+      "main": [
+        [
+          {
+            "node": "Read Cert File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Cert File": {
+      "main": [
+        [
+          {
+            "node": "Respond Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Webhook endpoints for certificate management. Exposes /webhook/cert/list, /webhook/cert/check, /webhook/cert/request, and /webhook/cert/download. Protected by Cloudflare Access Service Token when accessed via Cloudflare Tunnel (Method 3)."
+  }
+}
