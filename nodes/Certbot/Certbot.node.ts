@@ -100,6 +100,9 @@ async function executeObtain(
 			parts.push('--staging');
 		}
 
+		// Always allow expanding existing certificates with new domains
+		parts.push('--expand');
+
 		if (forceRenewal) {
 			parts.push('--force-renewal');
 		}
