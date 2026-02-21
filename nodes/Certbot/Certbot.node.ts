@@ -21,6 +21,39 @@ function shellEscape(value: string): string {
 	return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+/**
+ * Sanitize additional arguments to prevent command injection.
+ * Only allows certbot-style flags (--flag or --flag=value).
+ * Rejects shell metacharacters: ; | & $ ` ( ) { } < > \n
+ */
+function sanitizeAdditionalArgs(raw: string): string {
+	const trimmed = raw.trim();
+	if (!trimmed) return '';
+	// Reject any shell metacharacters
+	if (/[;|&$`(){}<>\n\r]/.test(trimmed)) {
+		throw new Error(
+			`additionalArguments contains disallowed shell characters: ${trimmed}`,
+		);
+	}
+	// Split on whitespace and validate each token
+	const tokens = trimmed.split(/\s+/);
+	const sanitized = tokens.map((token) => {
+		// Allow --flag, --flag=value, and bare values that follow a flag
+		if (token.startsWith('--') || token.startsWith('-')) {
+			const eqIdx = token.indexOf('=');
+			if (eqIdx > 0) {
+				const flag = token.slice(0, eqIdx + 1);
+				const val = token.slice(eqIdx + 1);
+				return flag + shellEscape(val);
+			}
+			return token;
+		}
+		// Bare value — shell-escape it
+		return shellEscape(token);
+	});
+	return sanitized.join(' ');
+}
+
 function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
 	return new Promise((resolve, reject) => {
 		exec(command, { maxBuffer: 10 * 1024 * 1024 }, (error: Error | null, stdout: string, stderr: string) => {
@@ -108,7 +141,7 @@ async function executeObtain(
 		}
 
 		if (additionalArguments.trim()) {
-			parts.push(additionalArguments.trim());
+			parts.push(sanitizeAdditionalArgs(additionalArguments));
 		}
 
 		const command = parts.join(' ');
